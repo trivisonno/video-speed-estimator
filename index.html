@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Speed Estimator</title>
+<meta name="description" content="Browser-based frame-by-frame video speed analysis: FPS estimation, pixel-scale calibration, and point tracking for vehicle speed reconstruction.">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header>
+  <h1>Video Speed Estimator</h1>
+  <span class="subtitle">Frame-by-frame pixel tracking &amp; speed analysis &middot; runs entirely in your browser, nothing is uploaded</span>
+</header>
+
+<div class="layout">
+
+  <!-- ===================== LEFT COLUMN: CONTROLS ===================== -->
+  <div>
+
+    <!-- Video load -->
+    <div class="panel">
+      <h2>1. Video</h2>
+      <input type="file" id="videoFile" accept="video/*">
+      <div class="hint" id="videoInfo">No video loaded.</div>
+      <div class="btn-row">
+        <button id="saveProjectBtn" class="small" disabled>Save project (.json)</button>
+        <button id="loadProjectBtn" class="small">Load project (.json)</button>
+        <input type="file" id="loadProjectFile" accept="application/json" style="display:none;">
+      </div>
+      <div class="hint">Loading a project restores FPS settings, calibration and tracked points. Reload the <em>same</em> video file first.</div>
+    </div>
+
+    <!-- FPS panel -->
+    <div class="panel" id="fpsPanel">
+      <h2>2. Frame rate <span class="badge" id="fpsBadge">not set</span></h2>
+
+      <fieldset>
+        <legend>Method</legend>
+        <div class="radio-line"><input type="radio" name="fpsMode" value="manual" id="fpsModeManual" checked><label for="fpsModeManual" style="margin:0;color:var(--text)">Trust known FPS (metadata / file properties)</label></div>
+        <div class="radio-line"><input type="radio" name="fpsMode" value="timestamps" id="fpsModeTimestamps"><label for="fpsModeTimestamps" style="margin:0;color:var(--text)">Estimate from burned-in timestamps</label></div>
+      </fieldset>
+
+      <div id="fpsManualBlock">
+        <label for="manualFps">FPS</label>
+        <div class="row">
+          <input type="number" id="manualFps" step="0.001" min="0.1" placeholder="e.g. 29.97">
+          <button id="detectFpsBtn" class="small" title="Best-effort detection via captureStream; not supported in all browsers and not reliable for all files.">Try auto-detect</button>
+        </div>
+      </div>
+
+      <div id="fpsTimestampBlock" style="display:none;">
+        <div class="hint">Step to a frame where you can read the overlay timestamp, enter it below, and add a sample. Add samples spread across a long time span (ideally 10+ seconds apart) so dropped/duplicated frames average out.</div>
+        <div class="row" style="margin-top:6px;">
+          <div>
+            <label>Timestamp at current frame</label>
+            <input type="text" id="tsInput" placeholder="HH:MM:SS.mmm or seconds">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button id="addTsSampleBtn" class="small primary">Add sample at current frame</button>
+        </div>
+        <div class="table-scroll" style="margin-top:8px; max-height:130px;">
+          <table>
+            <thead><tr><th>#</th><th>Frame</th><th>Timestamp</th><th></th></tr></thead>
+            <tbody id="tsSampleBody"></tbody>
+          </table>
+        </div>
+        <div id="tsQuality" class="calib-quality" style="display:none;"></div>
+      </div>
+
+      <div class="stat"><span>Effective FPS</span><b id="effectiveFpsOut">&mdash;</b></div>
+      <div class="stat"><span>Frame interval</span><b id="frameIntervalOut">&mdash;</b></div>
+    </div>
+
+    <!-- Calibration panel -->
+    <div class="panel" id="calibPanel">
+      <h2>3. Scale calibration <span class="badge" id="calibBadge">none</span></h2>
+      <label for="calibPreset">Quick reference (optional, verify actual spec)</label>
+      <select id="calibPreset">
+        <option value="">Custom / manual entry&hellip;</option>
+        <option value="101">Compact car wheelbase &asymp; 101 in</option>
+        <option value="107">Mid-size sedan wheelbase &asymp; 107 in</option>
+        <option value="112">Full-size sedan / SUV wheelbase &asymp; 112 in</option>
+        <option value="140">Pickup truck wheelbase &asymp; 140 in</option>
+        <option value="10">Standard traffic lane width &asymp; 10 ft (120 in)</option>
+      </select>
+
+      <div class="row">
+        <div>
+          <label for="calibDistance">Known distance</label>
+          <input type="number" id="calibDistance" step="any" placeholder="e.g. 107">
+        </div>
+        <div>
+          <label for="calibUnit">Unit</label>
+          <select id="calibUnit">
+            <option value="in">inches</option>
+            <option value="ft">feet</option>
+            <option value="m">meters</option>
+            <option value="cm">centimeters</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button id="pickCalibBtn" class="small primary" disabled>Pick 2 points on frame</button>
+        <button id="cancelCalibBtn" class="small" style="display:none;">Cancel</button>
+      </div>
+      <div class="hint">Click two points that span the known distance (e.g. front &amp; rear tire contact patches for wheelbase). You can add a calibration at more than one frame if the vehicle's distance from the camera changes a lot &mdash; scale will be interpolated between them.</div>
+
+      <div class="table-scroll" style="margin-top:8px; max-height:140px;">
+        <table>
+          <thead><tr><th>#</th><th>Frame</th><th>px</th><th>Real</th><th>Scale</th><th></th></tr></thead>
+          <tbody id="calibBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Track panel -->
+    <div class="panel" id="trackPanel">
+      <h2>4. Point tracking</h2>
+      <div class="track-tabs">
+        <div class="track-tab active-A" id="tabTrackA" data-track="A">&#9679; <span id="labelTrackA">Front wheel</span></div>
+        <div class="track-tab" id="tabTrackB" data-track="B">&#9679; <span id="labelTrackB">Rear wheel</span></div>
+      </div>
+      <div class="row">
+        <input type="text" id="renameTrackA" placeholder="Rename Track A" value="Front wheel">
+        <input type="text" id="renameTrackB" placeholder="Rename Track B" value="Rear wheel">
+      </div>
+      <div class="hint">Select the active track (or press <b>1</b> / <b>2</b>), then click the point on the frame. Clicking again on the same frame replaces the point. Click a table row to jump to that frame.</div>
+
+      <div class="table-scroll" style="margin-top:8px;">
+        <table>
+          <thead><tr><th>#</th><th>Frame</th><th>t (s)</th><th>x</th><th>y</th><th></th></tr></thead>
+          <tbody id="trackBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===================== RIGHT COLUMN: STAGE + RESULTS ===================== -->
+  <div>
+
+    <div class="stage-wrap">
+      <div id="stageContainer">
+        <canvas id="stage" width="960" height="540"></canvas>
+        <canvas id="loupe" width="180" height="180"></canvas>
+      </div>
+      <div class="transport">
+        <button id="playBtn" disabled>&#9654; Play</button>
+        <button id="prevFrameBtn" disabled title="Previous frame (&larr;)">&#9664;&#9664; Frame</button>
+        <button id="nextFrameBtn" disabled title="Next frame (&rarr;)">Frame &#9654;&#9654;</button>
+        <button id="prevNudgeBtn" disabled title="Nudge back 10ms">&minus;10ms</button>
+        <button id="nextNudgeBtn" disabled title="Nudge forward 10ms">+10ms</button>
+        <select id="playRate" disabled>
+          <option value="1">1&times;</option>
+          <option value="0.5">0.5&times;</option>
+          <option value="0.25">0.25&times;</option>
+          <option value="0.1">0.1&times;</option>
+        </select>
+        <span class="spacer"></span>
+        <span class="readout" id="frameReadout">frame &mdash; / &mdash; &middot; t=&mdash;s</span>
+      </div>
+      <div style="padding:8px 10px;">
+        <input type="range" id="seekBar" min="0" max="1000" value="0" step="1" style="width:100%;" disabled>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="panel tools-section">
+      <h2>5. Speed results</h2>
+      <div class="results-grid">
+        <div class="speed-card">
+          <div class="label"><span class="tag A">A</span> <span id="resLabelA">Front wheel</span> &mdash; avg speed</div>
+          <div class="value" id="resAvgA">&mdash;</div>
+          <div class="sub" id="resSubA">no data</div>
+        </div>
+        <div class="speed-card">
+          <div class="label"><span class="tag B">B</span> <span id="resLabelB">Rear wheel</span> &mdash; avg speed</div>
+          <div class="value" id="resAvgB">&mdash;</div>
+          <div class="sub" id="resSubB">no data</div>
+        </div>
+      </div>
+
+      <div class="table-scroll" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Track</th><th>Interval</th><th>&Delta;t (s)</th><th>&Delta;px</th><th>Distance</th><th>Speed</th><th>mph</th><th>km/h</th></tr></thead>
+          <tbody id="resultsBody"><tr><td colspan="8" style="color:var(--muted)">Track at least 2 points on a track, with calibration set, to see per-interval speeds.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Export -->
+    <div class="panel">
+      <h2>6. Export for external analysis</h2>
+      <div class="hint">Time / X / Y for each track, ready to paste into a companion PLA-style speed tool.</div>
+      <div class="btn-row">
+        <button id="copyABtn" class="small">Copy Track A (t, x, y)</button>
+        <button id="copyBBtn" class="small">Copy Track B (t, x, y)</button>
+        <button id="copyBothBtn" class="small">Copy both (combined)</button>
+        <button id="downloadCsvBtn" class="small">Download CSV</button>
+      </div>
+      <textarea class="export-box" id="exportPreview" readonly placeholder="Copied data preview appears here&hellip;"></textarea>
+    </div>
+
+  </div>
+
+</div>
+
+<div class="footer-note">
+  All processing happens locally in your browser. No video or click data is ever uploaded. Frame stepping uses time-based seeking at the estimated FPS &mdash; browsers do not expose true codec-level frame numbers, so use the &plusmn;10ms nudge buttons and the zoom loupe to align precisely on blurry or duplicated frames.
+</div>
+
+<script src="js/calc.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+.DS_Store
+*.speedproj.json
+/test.webm
+node_modules/
