@@ -51,7 +51,7 @@
       </div>
 
       <div id="fpsTimestampBlock" style="display:none;">
-        <div class="hint">Step to a frame where you can read the overlay timestamp, enter it below, and add a sample. Add samples spread across a long time span (ideally 10+ seconds apart) so dropped/duplicated frames average out.</div>
+        <div class="hint">Use Play or the &#9198;/&#9197; Prev/Next Frame buttons (or &larr;/&rarr; keys) &mdash; <b>not</b> the seek bar or the &plusmn;10ms nudge &mdash; to move to a frame where you can read the overlay timestamp, then enter it below and add a sample. Dragging the seek bar loses track of the real frame count, so the sample button is disabled until you step or play back to a known frame. Add samples spread across a long time span (ideally 10+ seconds apart) so dropped/duplicated frames average out.</div>
         <div class="row" style="margin-top:6px;">
           <div>
             <label>Timestamp at current frame</label>
@@ -63,7 +63,7 @@
         </div>
         <div class="table-scroll" style="margin-top:8px; max-height:130px;">
           <table>
-            <thead><tr><th>#</th><th>Frame</th><th>Timestamp</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th title="Real decoded frame number, counted from the start of the video">Frame</th><th>Timestamp</th><th></th></tr></thead>
             <tbody id="tsSampleBody"></tbody>
           </table>
         </div>
@@ -76,7 +76,7 @@
 
     <!-- Calibration panel -->
     <div class="panel" id="calibPanel">
-      <h2>3. Scale calibration <span class="badge" id="calibBadge">none</span></h2>
+      <h2>3. Reference length <span class="badge" id="calibBadge">none</span></h2>
       <label for="calibPreset">Quick reference (optional, verify actual spec)</label>
       <select id="calibPreset">
         <option value="">Custom / manual entry&hellip;</option>
@@ -107,11 +107,11 @@
         <button id="pickCalibBtn" class="small primary" disabled>Pick 2 points on frame</button>
         <button id="cancelCalibBtn" class="small" style="display:none;">Cancel</button>
       </div>
-      <div class="hint">Click two points that span the known distance (e.g. front &amp; rear tire contact patches for wheelbase). You can add a calibration at more than one frame if the vehicle's distance from the camera changes a lot &mdash; scale will be interpolated between them.</div>
+      <div class="hint">Click the two points tracked as Track A and Track B (e.g. front &amp; rear tire contact patches) at any one frame, spanning their known real-world distance apart &mdash; typically the vehicle's wheelbase. This is the single reference length the cross-ratio method below needs; it does <b>not</b> need re-measuring as the vehicle's apparent size changes, since cross-ratio is invariant to that. Adding more than one measurement just averages them for robustness.</div>
 
       <div class="table-scroll" style="margin-top:8px; max-height:140px;">
         <table>
-          <thead><tr><th>#</th><th>Frame</th><th>px</th><th>Real</th><th>Scale</th><th></th></tr></thead>
+          <thead><tr><th>#</th><th>Frame</th><th>px</th><th>Real</th><th></th></tr></thead>
           <tbody id="calibBody"></tbody>
         </table>
       </div>
@@ -128,6 +128,10 @@
         <input type="text" id="renameTrackA" placeholder="Rename Track A" value="Front wheel">
         <input type="text" id="renameTrackB" placeholder="Rename Track B" value="Rear wheel">
       </div>
+      <label class="row" style="align-items:center; gap:6px; margin-top:6px;">
+        <input type="checkbox" id="lockTracksToggle" checked style="flex:none; width:auto;">
+        <span style="flex:1;">Lock: switch to the other track after each click, so A/B points land on the same frame</span>
+      </label>
       <div class="hint">Select the active track (or press <b>1</b> / <b>2</b>), then click the point on the frame. Clicking again on the same frame replaces the point. Click a table row to jump to that frame.</div>
 
       <div class="table-scroll" style="margin-top:8px;">
@@ -147,6 +151,11 @@
       <div id="stageContainer">
         <canvas id="stage" width="960" height="540"></canvas>
         <canvas id="loupe" width="180" height="180"></canvas>
+        <div id="coordReadout" class="coord-readout">x: &mdash; &middot; y: &mdash;</div>
+        <div id="stageLoading" class="stage-loading hidden">
+          <div class="spinner"></div>
+          <div id="stageLoadingText">Preparing video&hellip;</div>
+        </div>
       </div>
       <div class="transport">
         <button id="playBtn" disabled>&#9654; Play</button>
@@ -171,23 +180,19 @@
     <!-- Results -->
     <div class="panel tools-section">
       <h2>5. Speed results</h2>
+      <div class="hint">Computed via the cross-ratio method (projective-invariant, not thrown off by the vehicle's changing apparent size), from Track A + Track B pairs at matching frames and the reference length above.</div>
       <div class="results-grid">
         <div class="speed-card">
-          <div class="label"><span class="tag A">A</span> <span id="resLabelA">Front wheel</span> &mdash; avg speed</div>
-          <div class="value" id="resAvgA">&mdash;</div>
-          <div class="sub" id="resSubA">no data</div>
-        </div>
-        <div class="speed-card">
-          <div class="label"><span class="tag B">B</span> <span id="resLabelB">Rear wheel</span> &mdash; avg speed</div>
-          <div class="value" id="resAvgB">&mdash;</div>
-          <div class="sub" id="resSubB">no data</div>
+          <div class="label">Vehicle speed (cross-ratio)</div>
+          <div class="value" id="resAvg">&mdash;</div>
+          <div class="sub" id="resSub">no data</div>
         </div>
       </div>
 
       <div class="table-scroll" style="margin-top:10px;">
         <table>
-          <thead><tr><th>Track</th><th>Interval</th><th>&Delta;t (s)</th><th>&Delta;px</th><th>Distance</th><th>Speed</th><th>mph</th><th>km/h</th></tr></thead>
-          <tbody id="resultsBody"><tr><td colspan="8" style="color:var(--muted)">Track at least 2 points on a track, with calibration set, to see per-interval speeds.</td></tr></tbody>
+          <thead><tr><th>#</th><th>Interval</th><th>&Delta;t (s)</th><th title="Which of the paper's 3 geometric cases applied">Case</th><th title="RMS deviation from collinear, as a fraction of the reference length &mdash; high values mean the vehicle was turning or the points are noisy">Straightness</th><th>Distance</th><th>Speed</th><th>mph</th><th>km/h</th></tr></thead>
+          <tbody id="resultsBody"><tr><td colspan="9" style="color:var(--muted)">Track matching points on both Track A and Track B (same frame), with a reference length set, to see per-interval speeds.</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -210,7 +215,7 @@
 </div>
 
 <div class="footer-note">
-  All processing happens locally in your browser. No video or click data is ever uploaded. Frame stepping uses time-based seeking at the estimated FPS &mdash; browsers do not expose true codec-level frame numbers, so use the &plusmn;10ms nudge buttons and the zoom loupe to align precisely on blurry or duplicated frames.
+  All processing happens locally in your browser. No video or click data is ever uploaded. Prev/Next Frame stepping lands on real decoded video frames (via <code>requestVideoFrameCallback</code>, where the browser supports it) rather than guessing from an assumed frame rate, and the total frame count is established once per video by a full decode pass on load. Releasing the seek bar after a drag triggers a quick automatic resync scan to recover the exact frame number (shown briefly as "Resyncing&hellip;"); the &plusmn;10ms nudge is for fine sub-frame alignment with the zoom loupe and intentionally skips that resync, so its frame counter reads "?" until you step or play again.
 </div>
 
 <script src="js/calc.js"></script>

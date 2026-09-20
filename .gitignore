@@ -1,4 +1,7 @@
 .DS_Store
-*.speedproj.json
+*.speedproj*.json
 /test.webm
 node_modules/
+*.mp4
+*.mkv
+*.pdf
