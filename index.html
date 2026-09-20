@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Video Speed Estimator</title>
-<meta name="description" content="Browser-based frame-by-frame video speed analysis: FPS estimation, pixel-scale calibration, and point tracking for vehicle speed reconstruction.">
+<meta name="description" content="Browser-based frame-by-frame video speed analysis using the cross-ratio method: FPS estimation, point tracking, and speed reconstruction.">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
 <header>
   <h1>Video Speed Estimator</h1>
-  <span class="subtitle">Frame-by-frame pixel tracking &amp; speed analysis &middot; runs entirely in your browser, nothing is uploaded</span>
+  <button id="helpBtn" class="small" type="button">Help</button>
 </header>
 
 <div class="layout">
@@ -25,11 +25,10 @@
       <input type="file" id="videoFile" accept="video/*">
       <div class="hint" id="videoInfo">No video loaded.</div>
       <div class="btn-row">
-        <button id="saveProjectBtn" class="small" disabled>Save project (.json)</button>
         <button id="loadProjectBtn" class="small">Load project (.json)</button>
+        <button id="saveProjectBtn" class="small" disabled>Save project (.json)</button>
         <input type="file" id="loadProjectFile" accept="application/json" style="display:none;">
       </div>
-      <div class="hint">Loading a project restores FPS settings, calibration and tracked points. Reload the <em>same</em> video file first.</div>
     </div>
 
     <!-- FPS panel -->
@@ -51,7 +50,7 @@
       </div>
 
       <div id="fpsTimestampBlock" style="display:none;">
-        <div class="hint">Use Play or the &#9198;/&#9197; Prev/Next Frame buttons (or &larr;/&rarr; keys) &mdash; <b>not</b> the seek bar or the &plusmn;10ms nudge &mdash; to move to a frame where you can read the overlay timestamp, then enter it below and add a sample. Dragging the seek bar loses track of the real frame count, so the sample button is disabled until you step or play back to a known frame. Add samples spread across a long time span (ideally 10+ seconds apart) so dropped/duplicated frames average out.</div>
+        <div class="hint">Step or play to a frame with a readable overlay timestamp (not the seek bar), then add a sample. See Help for details.</div>
         <div class="row" style="margin-top:6px;">
           <div>
             <label>Timestamp at current frame</label>
@@ -107,7 +106,7 @@
         <button id="pickCalibBtn" class="small primary" disabled>Pick 2 points on frame</button>
         <button id="cancelCalibBtn" class="small" style="display:none;">Cancel</button>
       </div>
-      <div class="hint">Click the two points tracked as Track A and Track B (e.g. front &amp; rear tire contact patches) at any one frame, spanning their known real-world distance apart &mdash; typically the vehicle's wheelbase. This is the single reference length the cross-ratio method below needs; it does <b>not</b> need re-measuring as the vehicle's apparent size changes, since cross-ratio is invariant to that. Adding more than one measurement just averages them for robustness.</div>
+      <div class="hint">Click the same two points tracked as Track A and Track B, at any one frame, spanning their known real-world distance (e.g. wheelbase). See Help for why this doesn't need re-measuring per frame.</div>
 
       <div class="table-scroll" style="margin-top:8px; max-height:140px;">
         <table>
@@ -130,9 +129,9 @@
       </div>
       <label class="row" style="align-items:center; gap:6px; margin-top:6px;">
         <input type="checkbox" id="lockTracksToggle" checked style="flex:none; width:auto;">
-        <span style="flex:1;">Lock: switch to the other track after each click, so A/B points land on the same frame</span>
+        <span style="flex:1;">Lock: switch to the other track after each click</span>
       </label>
-      <div class="hint">Select the active track (or press <b>1</b> / <b>2</b>), then click the point on the frame. Clicking again on the same frame replaces the point. Click a table row to jump to that frame.</div>
+      <div class="hint">Click the active track's point on the frame (1 / 2 to switch tracks). Click a table row to jump to that frame.</div>
 
       <div class="table-scroll" style="margin-top:8px;">
         <table>
@@ -180,7 +179,6 @@
     <!-- Results -->
     <div class="panel tools-section">
       <h2>5. Speed results</h2>
-      <div class="hint">Computed via the cross-ratio method (projective-invariant, not thrown off by the vehicle's changing apparent size), from Track A + Track B pairs at matching frames and the reference length above.</div>
       <div class="results-grid">
         <div class="speed-card">
           <div class="label">Vehicle speed (cross-ratio)</div>
@@ -199,8 +197,7 @@
 
     <!-- Export -->
     <div class="panel">
-      <h2>6. Export for external analysis</h2>
-      <div class="hint">Time / X / Y for each track, ready to paste into a companion PLA-style speed tool.</div>
+      <h2>6. Export</h2>
       <div class="btn-row">
         <button id="copyABtn" class="small">Copy Track A (t, x, y)</button>
         <button id="copyBBtn" class="small">Copy Track B (t, x, y)</button>
@@ -214,9 +211,55 @@
 
 </div>
 
-<div class="footer-note">
-  All processing happens locally in your browser. No video or click data is ever uploaded. Prev/Next Frame stepping lands on real decoded video frames (via <code>requestVideoFrameCallback</code>, where the browser supports it) rather than guessing from an assumed frame rate, and the total frame count is established once per video by a full decode pass on load. Releasing the seek bar after a drag triggers a quick automatic resync scan to recover the exact frame number (shown briefly as "Resyncing&hellip;"); the &plusmn;10ms nudge is for fine sub-frame alignment with the zoom loupe and intentionally skips that resync, so its frame counter reads "?" until you step or play again.
-</div>
+<footer class="footer-note">
+  <p>Runs entirely client-side; no video or tracking data leaves your browser.</p>
+  <p>Speed estimates use the cross-ratio method from Choi et al., <a href="https://doi.org/10.1016/j.forsciint.2025.112675" target="_blank" rel="noopener">Forensic Science International 378 (2026) 112675</a>. Verify results independently before relying on them for legal or safety-critical decisions.</p>
+</footer>
+
+<dialog id="helpDialog">
+  <div class="dialog-header">
+    <h2>Help</h2>
+    <button id="helpCloseBtn" class="small" type="button" aria-label="Close">&times;</button>
+  </div>
+
+  <section>
+    <h3>1. Video &amp; projects</h3>
+    <p>Load a video file from your computer. Nothing is uploaded; all processing happens locally.</p>
+    <p><strong>Save project</strong> writes your frame-rate settings, reference length, and tracked points to a <code>.json</code> file (not the video itself). <strong>Load project</strong> restores them &mdash; reload the same video file first.</p>
+  </section>
+
+  <section>
+    <h3>2. Frame rate</h3>
+    <p>Either trust a known FPS from the file's properties, or estimate it from a burned-in overlay clock: step or play (not the seek bar or &plusmn;10 ms nudge, which don't preserve frame-accurate position) to a frame with a readable timestamp, and add a sample. Add samples spread widely apart (10+ seconds) so occasional dropped or duplicated frames average out in the fit rather than skewing a single interval. The R&sup2; value flags a bad fit &mdash; typically a mistyped sample or inconsistent footage.</p>
+  </section>
+
+  <section>
+    <h3>3. Reference length</h3>
+    <p>Click the same two points tracked as Track A and Track B (e.g. front &amp; rear tire contact patches), at any one frame, and enter their known real-world distance apart &mdash; typically the vehicle's wheelbase.</p>
+    <p>This single length is all the cross-ratio method needs. Unlike a plain pixel-scale calibration, it does not need re-measuring as the vehicle's apparent size changes on screen, because the cross-ratio of collinear points is invariant under that kind of projective change. Adding more than one measurement just averages them for robustness.</p>
+  </section>
+
+  <section>
+    <h3>4. Point tracking</h3>
+    <p>Track A and Track B should be two points on the same rigid body (e.g. front and rear wheel), tracked at matching frames &mdash; the "Lock" option switches the active track after each click so both land on the same frame automatically. Click a table row to jump to that frame.</p>
+  </section>
+
+  <section>
+    <h3>5. Speed results</h3>
+    <p>Vehicle speed is computed via the cross-ratio method (see the citation in the footer), from Track A + Track B pairs at matching frames and the reference length above &mdash; not from a per-frame pixel scale, so it isn't thrown off by the vehicle's changing apparent size.</p>
+    <p>Each interval is checked for how closely its 4 points fall on a straight line (the "Straightness" column). Intervals that deviate too much &mdash; typically because the vehicle was turning &mdash; are shown dimmed and excluded from the overall average.</p>
+  </section>
+
+  <section>
+    <h3>Keyboard shortcuts</h3>
+    <p><kbd>&larr;</kbd> / <kbd>&rarr;</kbd> previous / next frame &middot; <kbd>Space</kbd> play / pause &middot; <kbd>1</kbd> / <kbd>2</kbd> switch active track</p>
+  </section>
+
+  <section>
+    <h3>Frame accuracy</h3>
+    <p>Prev/Next Frame stepping lands on real decoded video frames (via <code>requestVideoFrameCallback</code>, where the browser supports it) rather than assuming a frame rate. The total frame count is established once per video by a background scan on load. Releasing the seek bar after a drag triggers a quick automatic resync to recover the exact frame number; the &plusmn;10 ms nudge skips that resync for fast sub-frame alignment with the zoom loupe, so its frame counter reads "?" until you step or play again.</p>
+  </section>
+</dialog>
 
 <script src="js/calc.js"></script>
 <script src="js/app.js"></script>

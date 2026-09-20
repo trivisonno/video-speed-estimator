@@ -27,7 +27,8 @@ header {
   padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
   background: var(--panel);
 }
@@ -35,11 +36,6 @@ header {
 header h1 {
   font-size: 16px;
   margin: 0;
-}
-
-header .subtitle {
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .layout {
@@ -361,6 +357,8 @@ tbody tr.current { outline: 1px solid var(--accent); background: rgba(77,163,255
   padding: 16px;
   text-align: center;
 }
+.footer-note p { margin: 4px 0; }
+.footer-note a { color: var(--accent); }
 
 .disabled-overlay {
   opacity: 0.5;
@@ -387,3 +385,58 @@ textarea.export-box {
 }
 .calib-quality.good { background: rgba(76,175,130,0.15); color: var(--good); }
 .calib-quality.warn { background: rgba(224,168,62,0.15); color: var(--warn); }
+
+#helpDialog {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  max-width: 640px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+#helpDialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+#helpDialog .dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+#helpDialog h2 { font-size: 15px; margin: 0; }
+
+#helpDialog section {
+  border-top: 1px solid var(--border);
+  padding: 10px 0;
+}
+#helpDialog section:first-of-type { border-top: none; padding-top: 0; }
+
+#helpDialog h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+
+#helpDialog p {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0 0 6px;
+}
+#helpDialog p:last-child { margin-bottom: 0; }
+
+#helpDialog kbd {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+}

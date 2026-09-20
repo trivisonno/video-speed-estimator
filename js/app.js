@@ -89,6 +89,10 @@
   const loadProjectBtn = document.getElementById('loadProjectBtn');
   const loadProjectFile = document.getElementById('loadProjectFile');
 
+  const helpBtn = document.getElementById('helpBtn');
+  const helpDialog = document.getElementById('helpDialog');
+  const helpCloseBtn = document.getElementById('helpCloseBtn');
+
   // ---------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------
@@ -1157,6 +1161,15 @@
       }
     };
     reader.readAsText(file);
+  });
+
+  // ---------------------------------------------------------------------
+  // Help dialog
+  // ---------------------------------------------------------------------
+  helpBtn.addEventListener('click', () => helpDialog.showModal());
+  helpCloseBtn.addEventListener('click', () => helpDialog.close());
+  helpDialog.addEventListener('click', (e) => {
+    if (e.target === helpDialog) helpDialog.close(); // click landed on the backdrop, not the dialog's content
   });
 
   // ---------------------------------------------------------------------
